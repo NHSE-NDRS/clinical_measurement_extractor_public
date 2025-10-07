@@ -1,0 +1,69 @@
+name: Sync Latest Release to Public Repo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync-release:
+    environment: sync-to-public
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get latest release metadata
+        id: release
+        run: |
+          latest_release=$(gh api /repos/${{ github.repository }}/releases/latest | tr -d '\r')
+          echo "tag_name=$(echo "$latest_release" | jq -r .tag_name)" >> "$GITHUB_OUTPUT"
+          echo "name=$(echo "$latest_release" | jq -r .name)" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<EOF"
+            echo "$(echo "$latest_release" | jq -r .body)"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if tag exists in target repo
+        run: |
+          if gh api /repos/NHSE-NDRS/clinical_measurement_extractor_public/git/ref/tags/${{ steps.release.outputs.tag_name }} --jq .ref >/dev/null 2>&1; then
+            echo "Tag ${{ steps.release.outputs.tag_name }} already exists in target repo"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+
+      - name: Checkout source repo at release tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #4.2.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ steps.release.outputs.tag_name }}
+          path: source
+
+      - name: Clone target repo
+        run: |
+          git clone https://x-access-token:${{ secrets.TARGET_REPO_TOKEN }}@github.com/NHSE-NDRS/clinical_measurement_extractor_public.git target
+
+      - name: Copy release snapshot into target repo
+        run: |
+          rsync -a --delete --exclude='.git' source/ target/
+          cd target
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          git add .
+          git commit -m "Release ${{ steps.release.outputs.tag_name }}"
+
+      - name: Push commit + tag to target repo
+        working-directory: ./target
+        run: |
+          git tag ${{ steps.release.outputs.tag_name }}
+          git push origin main
+          git push origin ${{ steps.release.outputs.tag_name }}
+
+      - name: Create release in target repo
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 #v2.2.2
+        with:
+          tag_name: ${{ steps.release.outputs.tag_name }}
+          name: ${{ steps.release.outputs.name }}
+          body: ${{ steps.release.outputs.body }}
+          repository: NHSE-NDRS/clinical_measurement_extractor_public
+        env:
+          GITHUB_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
