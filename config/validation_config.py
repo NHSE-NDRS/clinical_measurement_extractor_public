@@ -38,3 +38,27 @@ class ValidSchema(BaseModel):
             return value
         else:
             return str(value)
+
+class MultiSchema(BaseModel):
+    """
+    The schema to validate a parsed JSON dictionary against.
+    
+    'Optional' means 'don't throw an error if this key is missing'
+    The key value is populated with a placeholder if it was missing 
+    and an alias added to refer to the key using an alternative name, 
+    in this case keys with spaces in them
+    """
+    multi_tumour: Optional[str] = Field(key_missing_str, alias = "multi tumour")
+
+    model_config = {
+        "validate_by_name" : True,
+        "extra" : "ignore"  # Discards unknown keys (default)
+    }
+    # Make sure score fields are strings
+    @field_validator('multi_tumour', mode='before')
+    @classmethod
+    def convert_to_str(cls, value: Any) -> Any:
+        if value == None:
+            return value
+        else:
+            return str(value)

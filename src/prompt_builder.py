@@ -110,7 +110,7 @@ class PromptBuilder():
         elif "llama" in self.model_id and not self.system_prompt:
             formatted_prompt = f"""<|begin_of_text|><|start_header_id|>user<|end_header_id|>
 {self.prompt_layout}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
-        elif "claude" in self.model_id:
+        elif any(model in self.model_id for model in ["claude","openai"]):
             formatted_prompt = self.prompt_layout
         else:
             raise ValueError("The model_id supplied to PromptBuilder is not supported")

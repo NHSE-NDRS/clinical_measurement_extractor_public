@@ -1,0 +1,85 @@
+You need to extract the five distinct metrics ER Status, ER Score, PR Status, PR Score and HER2 Status from the provided report. There are examples provided in the <example> xml tags. 
+
+Every entity extracted must have a value from the accepted values below: 
+{accepted_values} 
+Scores in the form 'x+y' or '(x+y)' are also acceptable
+
+Here are the rules and guidelines for you to follow: 
+
+ER and PR Rules: 
+ER refers to Oestrogen receptor and PR refers to Progesterone receptor. 
+Values for ER and PR range from 0 to 8 and often come directly after the terms 'Quick Score', 'QScore', 'QS', 'Q', 'Allred score' or just the abbreviations by themselves 'ER' or 'PR' such as 'Q0' or 'ER0'. 
+Only record the ER or PR status if it is explicitly stated in the report with one of the values in the accepted values list. 
+Sometimes the status and score will be given together and might be on the same line, for example "PR status: 6/8 (negative)" or "PR status: negative (6/8)" means a score of 6 and a status of negative. 
+IMPORTANT: DO NOT interpret the positivity or negativity of a percentage of cells as a status. The overall status must be written explicitly in the report. 
+
+HER2 Rules and Mappings:
+HER2 of "0" should be labelled "negative (0)"
+HER2 of "1+" should be labelled "negative (1+)"
+HER2 of "2+" should be labelled "borderline (2+)"
+HER2 of "3+" should be labelled "positive (3+)"
+Sometimes the report will send a borderline (2+) HER2 result for further analysis and come back with a different answer but this is a separate metric, so "borderline (2+)" would be the final answer.
+Note that the terms "borderline" and "equivocal" mean the same thing.
+If there is no score given as part of the HER2 status but the status given is negative, then record it as "negative (unknown)".
+If a HER2 score is given as "0/1+" (without specifying whether it is 0 or 1+), then record as "negative (unknown)". 
+
+Pay special attention to SUPPLEMENTARY REPORTS at the end where previously missing metrics sometimes get added or updated.
+After reading the whole report, if one of the metrics is still missing or the test hasn't been completed yet then set the relevant key to null. 
+Sometimes the report will not contain any of the information we want so in this case all the keys should be set to null in the output json. 
+
+<example1> 
+Report:
+Receptors and Ki67
+ER being repeated
+PR percentage of positive cells 1-10%, QS 2 (on slide positive control present)
+Her 3+ positive
+Ki 67: 27%
+Supplementary report
+ER moderately positive in 11-33%, QS 6
+
+Output:
+```json
+{{"er_status": null,
+"er_score": "6",
+"pr_status": null,
+"pr_score": "2",
+"her2_status": "positive (3+)"
+}}```
+</example1> 
+Note that the above example is null for ER and PR status because the report only talks about the percentage of cells rather than the overall interpretation of the status. 
+The overall status for ER and PR is missing in this report.
+
+<example2>
+Report:
+Calcification present on specimen X-ray: Radiograph not seen
+Histological calcification: Malignant
+ER status: positive (7/8)
+PR status: 5/8
+HER2 status is 2+ borderline FISH analysis to follow
+Addendum:
+HER2 status is negative
+
+Output:
+```json
+{{"er_status": "positive",
+"er_score": "7",
+"pr_status": null,
+"pr_score": "5",
+"her2_status": "borderline (2+)"
+}}```
+</example2> 
+Note that the example above is null for PR status since only the score is written. The HER2 status is borderline because that's what the report said originally, the HER2 in the addendum is the metric associated with the FISH analysis. 
+
+Return the output following this JSON markdown structure: 
+```json
+{{"er_status": "<value>",
+"er_score": "<value>",
+"pr_status": "<value>",
+"pr_score": "<value>",
+"her2_status": "<value>"
+}}```
+
+Only output the json. 
+
+Now extract the metrics from this pathology report: 
+{document}

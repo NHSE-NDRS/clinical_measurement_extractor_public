@@ -69,13 +69,17 @@ This code is run using JupyterLab in the SageMaker Studio.
 
 Notebook configuration:
 * **Instance**: ml.t3.medium
-* **Image**: Sagemaker Distribution 3.4.2 (Supports Python 3.12.9)
+* **Image**: Sagemaker Distribution 3.6.1 (Supports Python 3.12.9)
 * **Storage(GB)** 5
 
-### Requesting Access to HuggingFace Repositories.
-This project uses Claude, Llama, and Mistral Models.
+### Requesting Access to HuggingFace Repositories (optional).
+This project uses OpenAI, Claude, Llama and Mistral Models.
 
-You will need to create an account with HuggingFace, and then request access to these models.
+This step is only required if you want to estimate the cost of running the pipeline using the `estimate_cost` functionality.
+
+The code will work without setting this up.
+
+If you want to set this up, create an account with HuggingFace, and then request access to these models:
 
 1. [Llama3-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct)
 2. [Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2)
@@ -119,7 +123,7 @@ python -m pytest
 ```
 To run one specific test file, one specific test class or one specific test function, use the following commands respectively:
 ```bash
-python -m pytest tests/test_your_function.py
-python -m pytest tests/test_your_function.py::YourTestClass
-python -m pytest tests/test_your_function.py::YourTestClass::test_your_func
+python -m pytest tests/your_test_file.py
+python -m pytest tests/your_test_file.py::YourTestClass
+python -m pytest tests/your_test_file.py::YourTestClass::your_test_func
 ```

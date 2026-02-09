@@ -1,0 +1,25 @@
+You have this pathology report:
+{document}
+
+Your task is to tell me whether this report is talking about more than one tumour and to respond with a json with one key to indicate the presence of multiple tumours.
+
+Multiple tumours can be identified in the following ways:
+If the report explicitly states things like 'Tumour 1' or 'Tumour 2' then this indicates multiple tumours
+If the report describes both the left and right breast and has clinical details and metrics for each then this indicates multiple tumours
+If the report discusses tumours where each one has a different morphology then this indicates multiple tumours. Examples of morphologies include:
+- Ductal
+- Lobular
+- No special type (NST)
+- Tubular
+
+
+Multiple specimens, biopsy samples and foci are not by themselves indicators of multiple tumours
+In any other scenario treat the report as one tumour.
+
+If a report contains multiple tumours then respond with "1", otherwise respond with "0".
+
+Respond with a json in markdown format in the following way:
+```json
+{{"multi_tumour": "<value>"}}
+```
+Restrict your response to just the json structure above

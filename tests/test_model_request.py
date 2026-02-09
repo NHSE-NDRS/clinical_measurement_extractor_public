@@ -59,20 +59,25 @@ class TestModelRequest():
         output = model_requester.get_model_id()
         assert output == "mistral.for.example"
 
-    def test_create_claude_body(self):
+    @pytest.mark.parametrize(
+        "system_prompt, expected",
+        [
+        (None, '{"messages": [{"role": "user", "content": "Example prompt.\\nExample prompt. Document: fake document"}], "arg1": 0.5}'),
+        ("You are an expert", '{"system": "You are an expert", "messages": [{"role": "user", "content": "Example prompt.\\nExample prompt. Document: fake document"}], "arg1": 0.5}')
+    ])
+    def test_create_claude_body(self, system_prompt, expected):
         model_id = "claude.for.example"
         prompt_layout = "Example prompt.\nExample prompt. Document: {document}"
-        prompt_builder = PromptBuilder(model_id, prompt_layout)
+        prompt_builder = PromptBuilder(model_id, prompt_layout, system_prompt)
         
         model_args = {"arg1": 0.5}
         model_requester = ModelRequest(model_id, model_args, prompt_builder)
         
         doc = "fake document"
         doc_id = 1
-        expected_output = '{"messages": [{"role": "user", "content": [{"type": "text", "text": "Example prompt.\\nExample prompt. Document: fake document"}]}], "arg1": 0.5}'
         output = model_requester.create_claude_request_body(doc, doc_id, model_args)
         
-        assert output == expected_output
+        assert output == expected
 
     @pytest.mark.parametrize(
         "system_prompt, expected",
@@ -108,4 +113,24 @@ class TestModelRequest():
         output = model_requester.create_mistral_request_body(doc, doc_id, model_args)
 
         assert output == expected_output
+
+    @pytest.mark.parametrize(
+        "system_prompt, expected",
+        [
+        (None, '{"messages": [{"role": "user", "content": "Example prompt.\\nExample prompt. Document: fake document"}], "arg1": 0.5}'),
+        ("You are an expert", '{"messages": [{"role": "system", "content": "You are an expert"}, {"role": "user", "content": "Example prompt.\\nExample prompt. Document: fake document"}], "arg1": 0.5}')
+    ])
+    def test_create_openai_body(self, system_prompt, expected):
+        model_id = "openai.for.example"
+        prompt_layout = "Example prompt.\nExample prompt. Document: {document}"
+        prompt_builder = PromptBuilder(model_id, prompt_layout, system_prompt)
+        
+        model_args = {"arg1": 0.5}
+        model_requester = ModelRequest(model_id, model_args, prompt_builder)
+        
+        doc = "fake document"
+        doc_id = 1
+        output = model_requester.create_openai_request_body(doc, doc_id, model_args)
+        
+        assert output == expected
     

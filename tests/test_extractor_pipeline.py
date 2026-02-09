@@ -36,18 +36,15 @@ def mock_model_config(monkeypatch):
     yield
     
 @pytest.fixture
-def mock_accepted_values(monkeypatch):
-    monkeypatch.setattr(
-        "config.pipeline_config.accepted_values",
-        {
+def standard_accepted_values():
+    values = {
             "er_status": ['a','b','c'],
             "er_score": ['2','3','4'],
             "pr_status": ['a','b','c'],
             "pr_score": ['2','3','4'],
             "her2_status": ['a','b','c']
         }
-    )
-    yield
+    return values
 
 @pytest.fixture
 def callable_preprocessor():
@@ -94,6 +91,13 @@ def mock_model_request():
     return model_request
 
 @pytest.fixture
+def mock_get_tokenizer():
+    def fake_tokenizer(x):
+        return {'input_ids': [123,456,789,321,654,987], 'attention_mask': [1, 1, 1, 1, 1]}
+    with patch.object(ExtractorPipeline, "_get_tokenizer", return_value=fake_tokenizer) as mock_method:
+        yield mock_method
+
+@pytest.fixture
 def mock_record_cost():
     with patch.object(ExtractorPipeline, "record_cost", return_value=None) as mock_method:
         yield mock_method
@@ -120,12 +124,13 @@ def mock_save_df_to_s3():
         yield mock
 
 @pytest.fixture
-def pipeline(mock_config, mock_preprocessor, mock_model_request, mock_model_config):
+def pipeline(mock_config, mock_preprocessor, mock_model_request, mock_model_config, standard_accepted_values):
     return ExtractorPipeline(
         config_file_path="dummy_path.yaml",
         preprocessor=mock_preprocessor,
         model_request=mock_model_request,
-        valid_structure = vconf.ValidSchema
+        valid_structure = vconf.ValidSchema,
+        accepted_values = standard_accepted_values
     )
       
 class TestExtractorPipeline:
@@ -139,7 +144,7 @@ class TestExtractorPipeline:
         assert pipeline.id_col == id_col
         assert pipeline.free_text_col == freetext_col
 
-    def test_model_config_error(self, callable_preprocessor, callable_prompt_builder):
+    def test_model_config_error(self, callable_preprocessor, callable_prompt_builder, standard_accepted_values):
         model_id = "unsupported.model"
         model_args = {"arg1":200, "arg2":0, "arg3":0.9}
         expected = "'Check model_id, no config exists for the supplied model'"
@@ -150,7 +155,8 @@ class TestExtractorPipeline:
             ExtractorPipeline("./config/local.yaml",
                               callable_preprocessor,
                               model_requester,
-                              valid_structure = vconf.ValidSchema)
+                              valid_structure = vconf.ValidSchema,
+                              accepted_values = standard_accepted_values)
 
         assert expected == str(err.value)
 
@@ -190,7 +196,7 @@ class TestExtractorPipeline:
         output_df = pipeline.run(df,
                                  estimate_cost=False,
                                  calculate_cost=False)
-
+        
         assert isinstance(output_df, pd.DataFrame)
         assert len(output_df) == 2
         assert set(output_df.columns) >= {
@@ -207,7 +213,7 @@ class TestExtractorPipeline:
             ("meta.llama3-8b-instruct-v1:0")
         ],
     )
-    def test_estimate_cost_output_types(self, model_id, callable_prompt_builder):
+    def test_estimate_cost_output_types(self, model_id, callable_prompt_builder, mock_get_tokenizer):
         model_args = {"arg1":200, "arg2":0, "arg3":0.9}
         doc_df = pd.DataFrame({id_col:[1,2], freetext_col:["report1","report2"]})
         prompt_layout = "Example prompt. Document: {document}"
@@ -216,7 +222,8 @@ class TestExtractorPipeline:
         extractor = ExtractorPipeline("./config/local.yaml",
                                       callable_preprocessor,
                                       model_requester,
-                                      valid_structure = vconf.ValidSchema)
+                                      valid_structure = vconf.ValidSchema,
+                                      accepted_values = standard_accepted_values)
         output = extractor.estimate_cost(doc_df, text_column=freetext_col)
         
         assert isinstance(output, pd.DataFrame)
@@ -224,7 +231,7 @@ class TestExtractorPipeline:
         assert all(isinstance(x, float) for x in output["est_input_cost"].tolist())
         assert all(isinstance(x, float) for x in output["est_output_cost"].tolist())
 
-    def test_estimate_cost_no_support(self, callable_prompt_builder):
+    def test_estimate_cost_no_support(self, callable_prompt_builder, mock_get_tokenizer):
         """
         Check this function does nothing when cost estimation is not supported for a model
         i.e. when the required dictionary key is missing in the model config
@@ -237,7 +244,8 @@ class TestExtractorPipeline:
         extractor = ExtractorPipeline("./config/local.yaml",
                                       callable_preprocessor,
                                       model_requester,
-                                      valid_structure = vconf.ValidSchema)
+                                      valid_structure = vconf.ValidSchema,
+                                      accepted_values = standard_accepted_values)
         output = extractor.estimate_cost(doc_df, text_column=freetext_col)
         
         pd.testing.assert_frame_equal(doc_df, output)
@@ -249,7 +257,7 @@ class TestExtractorPipeline:
             ("meta.llama3-8b-instruct-v1:0")
         ],
     )
-    def test_calculate_cost_output_types(self, model_id, callable_preprocessor, callable_prompt_builder):
+    def test_calculate_cost_output_types(self, model_id, callable_preprocessor, callable_prompt_builder, standard_accepted_values):
         model_args = {"arg1":200, "arg2":0, "arg3":0.9}
         doc_df = pd.DataFrame({id_col:[1,2], freetext_col:["report1","report2"],"input_tokens":[20,25],"output_tokens":[10,15]})
         
@@ -257,7 +265,8 @@ class TestExtractorPipeline:
         extractor = ExtractorPipeline("./config/local.yaml",
                                       callable_preprocessor,
                                       model_requester,
-                                      valid_structure = vconf.ValidSchema)
+                                      valid_structure = vconf.ValidSchema,
+                                      accepted_values = standard_accepted_values)
         output = extractor.calculate_cost(doc_df)
         
         assert isinstance(output, pd.DataFrame)
@@ -273,7 +282,7 @@ class TestExtractorPipeline:
             (pd.DataFrame({id_col:[1,2], freetext_col:["report1","report2"]}))
         ],
     )
-    def test_calc_cost_col_error(self, doc_df, callable_preprocessor, callable_prompt_builder):
+    def test_calc_cost_col_error(self, doc_df, callable_preprocessor, callable_prompt_builder, standard_accepted_values):
         model_id = "mistral.mistral-7b-instruct-v0:2"
         model_args = {"arg1":200, "arg2":0, "arg3":0.9}
         expected = "The provided dataframe does not contain the required columns for cost calculation"
@@ -285,7 +294,8 @@ class TestExtractorPipeline:
         extractor = ExtractorPipeline("./config/local.yaml",
                                       callable_preprocessor,
                                       model_requester,
-                                      valid_structure = vconf.ValidSchema)
+                                      valid_structure = vconf.ValidSchema,
+                                      accepted_values = standard_accepted_values)
         with pytest.raises(Exception) as err:
             extractor.calculate_cost(doc_df)
             
@@ -412,7 +422,7 @@ class TestCMEValidation():
                  (None,"validation_failed")),# json parsing went wrong
             ],
         )
-    def test_validate_update_json(self,parsed_json, expected_output, pipeline, mock_accepted_values):
+    def test_validate_update_json(self,parsed_json, expected_output, pipeline):
         doc_id = 0
         output = pipeline.validate_update_json(parsed_json, doc_id)
         assert output == expected_output

@@ -56,16 +56,28 @@ class ModelRequest():
         prompt_for_body = {"messages": [
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt_for_body
-                    }
-                ]
+                "content": prompt_for_body
             }
         ]}
         if system_prompt:
             prompt_for_body = {**{"system":system_prompt},**prompt_for_body}
+            
+        body_json = {**prompt_for_body, **args}
+        
+        return json.dumps(body_json)
+
+    def create_openai_request_body(self,doc: str, doc_id: int, args: dict) -> dict:
+        self.logger.info(f"Document id: {doc_id} | Creating OpenAI request body")
+        system_prompt = self.prompt.system_prompt
+        prompt_for_body = self.prompt.build(doc, doc_id)
+        prompt_for_body = {"messages": [
+            {
+                "role": "user",
+                "content":  prompt_for_body
+            }
+        ]}
+        if system_prompt:
+            prompt_for_body["messages"].insert(0,{"role":"system","content":system_prompt})
             
         body_json = {**prompt_for_body, **args}
         
@@ -95,8 +107,9 @@ class ModelRequest():
         elif "llama" in self.model_id:
             body_json = self.create_llama_request_body(doc, doc_id, self.model_args)
         elif "claude" in self.model_id:
-            # untested at this point as we don't have access to claude yet
             body_json = self.create_claude_request_body(doc, doc_id, self.model_args)
+        elif "openai" in self.model_id:
+            body_json = self.create_openai_request_body(doc, doc_id, self.model_args)
         
         request_json = {
             "modelId": self.model_id,

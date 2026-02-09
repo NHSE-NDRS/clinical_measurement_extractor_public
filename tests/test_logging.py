@@ -77,12 +77,24 @@ def mock_record_cost():
         yield mock_method
 
 @pytest.fixture
-def pipeline(mock_config, mock_preprocessor, mock_model_request, mock_model_config):
+def standard_accepted_values():
+    values = {
+            "er_status": ['a','b','c'],
+            "er_score": ['2','3','4'],
+            "pr_status": ['a','b','c'],
+            "pr_score": ['2','3','4'],
+            "her2_status": ['a','b','c']
+        }
+    return values
+
+@pytest.fixture
+def pipeline(mock_config, mock_preprocessor, mock_model_request, mock_model_config, standard_accepted_values):
     return ExtractorPipeline(
         config_file_path="dummy_path.yaml",
         preprocessor=mock_preprocessor,
         model_request=mock_model_request,
-         valid_structure = vconf.ValidSchema
+        valid_structure = vconf.ValidSchema, 
+        accepted_values = standard_accepted_values
     )
 
 class TestLogging:

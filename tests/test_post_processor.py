@@ -5,31 +5,28 @@ import pandas as pd
 from src.post_processor import PostProcessor
 
 @pytest.fixture
-def standard_post_processor():
-    df = pd.DataFrame([
-            {"id": "1", "report": "test one","er_status": "a","er_score": "1+2","pr_status": "b","pr_score": "2+2","her2_status": "c","status":"partial",},
-            {"id": "2", "report": "test two","er_status": "c","er_score": "4","pr_status": "b","pr_score": np.nan,"her2_status": "a","status":"valid",},
-        ])
-    cols_of_interest = ["er_status","er_score","pr_status","pr_score","her2_status"]
-    processor = PostProcessor(df, cols_of_interest)
-
-    yield processor
-
-    del processor
-
-@pytest.fixture
-def mock_accepted_values(monkeypatch):
-    monkeypatch.setattr(
-        "config.pipeline_config.accepted_values",
-        {
+def standard_accepted_values():
+    values = {
             "er_status": ['a','b','c',None],
             "er_score": ['2','3','4',None],
             "pr_status": ['a','b','c',None],
             "pr_score": ['2','3','4',None],
             "her2_status": ['a','b','c',None]
         }
-    )
-    yield
+    return values
+    
+@pytest.fixture
+def standard_post_processor(standard_accepted_values):
+    df = pd.DataFrame([
+            {"id": "1", "report": "test one","er_status": "a","er_score": "1+2","pr_status": "b","pr_score": "2+2","her2_status": "c","status":"partial",},
+            {"id": "2", "report": "test two","er_status": "c","er_score": "4","pr_status": "b","pr_score": np.nan,"her2_status": "a","status":"valid",},
+        ])
+    cols_of_interest = ["er_status","er_score","pr_status","pr_score","her2_status"]
+    processor = PostProcessor(df, cols_of_interest, standard_accepted_values)
+
+    yield processor
+
+    del processor
 
 class TestPostProcessor:
 
@@ -114,8 +111,10 @@ class TestPostProcessor:
     def test_process_row(self, standard_post_processor):
         data = {"id": "2", "report": "test two","er_status": "positive","er_score": "6","pr_status": "positive","pr_score": np.nan,"her2_status": "borderline", "status":"valid"}
         row = pd.Series(data)
+        functions = {"dummy_func": lambda x: x}
+        settings = {"dummy_func":{"enabled":True,"args":[]}}
 
-        result = standard_post_processor.process_row(row)
+        result = standard_post_processor.process_row(row, functions, settings)
         expected_cols = list(data.keys()) + [col + "_p" for col in standard_post_processor.cols_to_process] + ["status_processed"]
         assert isinstance(result, dict)
         assert all(col in result.keys() for col in expected_cols)
@@ -123,15 +122,21 @@ class TestPostProcessor:
     def test_process_row_val_failed(self, standard_post_processor):
         data = {"id": "2", "report": "test two","er_status": np.nan,"er_score": np.nan,"pr_status": np.nan,"pr_score": np.nan,"her2_status": np.nan, "status":"validation_failed"}
         row = pd.Series(data)
-
-        result = standard_post_processor.process_row(row)
+        functions = {"dummy_func": lambda x: x}
+        settings = {"dummy_func":{"enabled":True,"args":[]}}
+        
+        result = standard_post_processor.process_row(row, functions, settings)
         expected_cols = list(data.keys()) + ["status_processed"]
         assert isinstance(result, dict)
         assert all(col in result.keys() for col in expected_cols)
         assert result["status_processed"] == "validation_failed"
 
-    def test_run(self, standard_post_processor, mock_accepted_values):
-        new_df = standard_post_processor.run()
+    def test_run(self, standard_post_processor):
+        
+        functions = {"func": standard_post_processor.map_two_part_scores}
+        settings = {"func":{"enabled":True,"args":[{"cols_to_map":["er_score",  "pr_score"]}]}}
+        
+        new_df = standard_post_processor.run(functions, settings)
         expected_df = pd.DataFrame([
             {"id": "1", "report": "test one","er_status": "a","er_score": "1+2","pr_status": "b","pr_score": "2+2","her2_status": "c","status":"partial","er_status_p": "a","er_score_p": "3","pr_status_p": "b","pr_score_p": "4","her2_status_p": "c",  "status_processed":"valid"},
             {"id": "2", "report": "test two","er_status": "c","er_score": "4","pr_status": "b","pr_score": np.nan,"her2_status": "a","status":"valid","er_status_p": "c","er_score_p": "4","pr_status_p": "b","pr_score_p": None,"her2_status_p": "a","status_processed":"valid"},

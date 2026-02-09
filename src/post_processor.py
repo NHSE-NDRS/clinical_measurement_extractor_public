@@ -16,10 +16,12 @@ class PostProcessor:
     """
     def __init__(self,
                  df: pd.DataFrame,
-                 cols_to_process: list):
+                 cols_to_process: list, 
+                 accepted_values: dict):
 
         self.df = df
         self.cols_to_process = cols_to_process
+        self.accepted_values = accepted_values
         
     def apply_general_mapping(self, row: dict, mapping: dict, cols_to_map: list) -> dict:
         """
@@ -61,21 +63,21 @@ class PostProcessor:
                 updated_row[col] = val_norm.split("/")[0]
         return updated_row
 
-    def map_two_part_scores(self, original: dict, cols_to_check: list) -> dict:
+    def map_two_part_scores(self, original: dict, cols_to_map: list) -> dict:
         """
         Converts a dictionary with values like '5+3', '2+2' to their single-digit equivalent.
         Only keys specified in cols_to_check will be converted.
 
         Args:
             original (dict): a dictionary containing the original values
-            cols_to_check (list): a list of keys (columns) to do the conversion on
+            cols_to_map (list): a list of keys (columns) to do the conversion on
         Returns:
             dict: a dictionary with the values updated
         """
         
         new_values = original.copy()
         pattern = re.compile(r'^\s*\d\s*\+\s*\d\s*$')
-        for col in cols_to_check:
+        for col in cols_to_map:
             if original[col] in [np.nan, None]: continue
             if pattern.match(original[col]):
                 number = eval(original[col])
@@ -110,13 +112,15 @@ class PostProcessor:
     
         return result
 
-    def process_row(self, original_row: dict | pd.Series) -> dict:
+    def process_row(self, original_row: dict | pd.Series, functions: dict, configuration: dict) -> dict:
         """
         Processes one row of data and adds new columns with post-processed values.
         New columns are suffixed with '_p'
 
         Args:
             row (dict or pd.Series): row of data
+            functions (dict): dictionary of callables to loop through
+            configuration (dict): for each function, two keys 'enabled' and 'args' 
         Returns:
             dict: Returns a new dictionary with new columns appended.
         """
@@ -126,33 +130,36 @@ class PostProcessor:
         if original_row['status'] == vconf.validation_failed_message:
             return {**original_row, "status_processed": vconf.validation_failed_message}
 
-        new_dict = self.map_two_part_scores(data_to_process, conf.numeric_cols)
-        new_dict = self.score_to_status(new_dict, [("er_score","er_status"),("pr_score","pr_status")])
+        new_dict = data_to_process.copy()
+        for name, settings in configuration.items():
+            if settings.get("enabled") == False: continue
 
-        new_dict = self.map_score(new_dict, conf.numeric_cols)
-        
-        her2_mapping = {"0": "negative", "1+": "negative", "2+": "borderline", "3+": "positive"}
-        new_dict = self.apply_general_mapping(new_dict, her2_mapping, ["her2_status"])
-
-        common_errors = {"null": np.nan}
-        new_dict = self.apply_general_mapping(new_dict, common_errors, conf.numeric_cols + conf.status_cols)            
+            func = functions.get(name)
+            if func is None:
+                raise ValueError(f"Function '{name}' not found.")
+            args_list = settings.get("args")
+            for args in args_list:
+                new_dict = func(new_dict, **args)   
 
         new_dict = {k: None if isinstance(v, float) and np.isnan(v) else v for k,v in new_dict.items()}#convert nan to None ready for re-validation
         
-        status_processed = check_valid_values(new_dict, conf.accepted_values)
+        status_processed = check_valid_values(new_dict, self.accepted_values)
         
         new_dict = {f"{k}_p": v for k, v in new_dict.items()}
 
         return {**original_row, **new_dict, "status_processed":status_processed}
 
-    def run(self):
+    def run(self, functions, configuration):
         """
         Runs all postprocessing steps on the dataframe and columns provided in the class.
-
+        
+        Args:
+            functions (dict): dictionary of callables to loop through
+            configuration (dict): for each function, two keys 'enabled' and 'args'
         Returns:
             pd.DataFrame: df with new post-processed columns
         """
-        processed = self.df.apply(self.process_row, axis = 1)
+        processed = self.df.apply(self.process_row, functions=functions, configuration=configuration, axis = 1)
         processed_df = pd.DataFrame(processed.tolist())
 
         return processed_df

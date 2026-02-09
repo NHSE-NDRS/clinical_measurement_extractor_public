@@ -39,11 +39,13 @@ class ExtractorPipeline:
                  preprocessor: TextPreprocessor,
                  model_request: ModelRequest,
                  valid_structure: BaseModel,
+                 accepted_values: dict,
                  record_pipeline_cost = True):
         
         self.preprocessor = preprocessor
         self.model_request = model_request
         self.valid_structure = valid_structure
+        self.accepted_values = accepted_values
         config = load_config_from_yaml(file_path=config_file_path)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.record_pipeline_cost = record_pipeline_cost
@@ -99,6 +101,8 @@ class ExtractorPipeline:
             model_text = model_response['generation']
         elif "claude" in self.model_id:
             model_text = model_response["content"][0]["text"]
+        elif "openai" in self.model_id:
+            model_text = model_response['choices'][0]['message']['content']
         else:
             raise Exception("Cannot extract model response text")
             
@@ -322,7 +326,7 @@ class ExtractorPipeline:
             validated  = self.valid_structure(**parsed_json)
             parsed_and_validated = validated.model_dump()
 
-            status = check_valid_values(parsed_and_validated, conf.accepted_values)
+            status = check_valid_values(parsed_and_validated, self.accepted_values)
 
             return parsed_and_validated, status
                 
